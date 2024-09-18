@@ -1,160 +1,160 @@
 ﻿#include <iostream>
-#include <fstream>
-#include <cmath>
 #include <vector>
+#include <cmath> // Для функции sqrt
+#include <iomanip> // Для форматирования вывода
+#include <fstream> // Для работы с файлами
 
-// Общие переменные для работы с матрицей
-int n, nn;
+using namespace std;
 
-// Функция для нахождения максимального значения
-int max_(int a, int b) {
-    return (a > b) ? a : b;
+// Функция для вывода матрицы
+void printMatrix(const vector<vector<double>>& matrix) {
+    int n = matrix.size();
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            cout << setw(10) << matrix[i][j] << " ";
+        }
+        cout << endl;
+    }
 }
 
-// Функция LU-разложения матрицы
-void calc_lusq(const std::vector<int>& ia, std::vector<float>& di, std::vector<float>& al, std::vector<float>& au) {
-    for (int i = 0; i < n; ++i) {
-        int num_elem_i = ia[i + 1] - ia[i];  // Количество элементов в i-ой строке
-        int ind = ia[i];  // Индекс в массиве al
-        float sum_ = 0.0;  // Сумма для диагонали
+// Функция для вывода вектора
+void printVector(const vector<double>& vec) {
+    for (double v : vec) {
+        cout << setw(10) << v << " ";
+    }
+    cout << endl;
+}
 
-        for (int j = i - num_elem_i; j < i; ++j) {
-            float sum_l = 0.0;
-            float sum_u = 0.0;
-            int num_elem_j = ia[j + 1] - ia[j];  // Количество элементов в j-ой строке
+// Функция для выполнения LU(sq)-разложения
+bool LU_SQ_Decomposition(const vector<vector<double>>& A, vector<vector<double>>& L, vector<vector<double>>& U) {
+    int n = A.size();
+    L = vector<vector<double>>(n, vector<double>(n, 0));
+    U = vector<vector<double>>(n, vector<double>(n, 0));
 
-            int k = max_(i - num_elem_i, j - num_elem_j);
-            int ind1 = ia[i] - (i - num_elem_i) + k;
-            int ind2 = ia[j] - (j - num_elem_j) + k;
-            int end_k = j - 1 - k + ind1;
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j <= i; j++) {
+            double sum = 0;
 
-            for (; ind1 <= end_k; ++ind1) {
-                sum_l += al[ind1] * au[ind2];
-                sum_u += au[ind1] * al[ind2];
-                ind2++;
+            // Вычисление элементов нижнетреугольной матрицы L
+            if (i == j) {  // Диагональный элемент
+                for (int k = 0; k < j; k++) {
+                    sum += L[j][k] * L[j][k];
+                }
+                double value = A[j][j] - sum;
+                if (value <= 0) {
+                    cout << "Матрица не является положительно определенной." << endl;
+                    return false;
+                }
+                L[j][j] = sqrt(value);
+                U[j][j] = L[j][j]; // L и U имеют одинаковые диагональные элементы
             }
-
-            al[ind] = (al[ind] - sum_l) / di[j];
-            au[ind] = (au[ind] - sum_u) / di[j];
-            sum_ += al[ind] * au[ind];
-            ind++;
-        }
-
-        if (di[i] - sum_ <= 0.0) {
-            std::cerr << "Matrix is NOT LU(sq) decomposable!" << std::endl;
-            exit(1);
-        }
-
-        di[i] = std::sqrt(di[i] - sum_);
-    }
-}
-
-// Функция для вычисления вектора y
-void calc_y(const std::vector<int>& ia, const std::vector<float>& di, const std::vector<float>& al, std::vector<float>& vect) {
-    for (int i = 0; i < n; ++i) {
-        float sum_ = 0.0;
-        int num_elem_i = ia[i + 1] - ia[i];
-        int ind = ia[i];
-
-        for (int j = i - num_elem_i; j < i; ++j) {
-            sum_ += al[ind] * vect[j];
-            ind++;
-        }
-
-        vect[i] = (vect[i] - sum_) / di[i];
-    }
-}
-
-// Функция для вычисления вектора x
-void calc_x(const std::vector<int>& ia, const std::vector<float>& di, const std::vector<float>& au, std::vector<float>& vect) {
-    for (int i = n - 1; i >= 0; --i) {
-        float xi = vect[i];
-        xi /= di[i];
-        vect[i] = xi;
-
-        int ind = ia[i + 1] - 1;
-        int num_elem_i = ia[i + 1] - ia[i];
-
-        for (int j = i - 1; j >= i - num_elem_i; --j) {
-            vect[j] -= au[ind] * xi;
-            ind--;
+            else {  // Вне диагонали
+                for (int k = 0; k < j; k++) {
+                    sum += L[i][k] * L[j][k];
+                }
+                L[i][j] = (A[i][j] - sum) / L[j][j];
+                U[j][i] = L[i][j]; // U является транспонированной копией L
+            }
         }
     }
+
+    return true;
 }
 
-// Функция для чтения данных из файла
-void read_(std::vector<float>& mem, std::vector<int>& ia, int& di, int& al, int& au, int& vect) {
-    std::ifstream file_matrix("profile.txt");
-    std::ifstream file_vector("vector.txt");
+// Прямой ход: решение системы Ly = F
+vector<double> forwardSubstitution(const vector<vector<double>>& L, const vector<double>& F) {
+    int n = L.size();
+    vector<double> y(n);
 
-    if (!file_matrix.is_open() || !file_vector.is_open()) {
-        std::cerr << "ERROR: Can't read profile.txt or vector.txt" << std::endl;
-        exit(1);
+    for (int i = 0; i < n; i++) {
+        double sum = 0;
+        for (int j = 0; j < i; j++) {
+            sum += L[i][j] * y[j];
+        }
+        y[i] = (F[i] - sum) / L[i][i];
     }
 
-    file_matrix >> n;
-    ia.resize(n + 1);
-    for (int i = 0; i < n + 1; ++i) {
-        file_matrix >> ia[i];
-    }
-
-    nn = ia[n] - 1;
-    di = 0;
-    mem.resize(nn * 2 + n + 1);
-
-    for (int i = 0; i < n; ++i) {
-        file_matrix >> mem[di + i];
-    }
-
-    al = di + n + 1;
-    for (int i = 0; i < nn; ++i) {
-        file_matrix >> mem[al + i];
-    }
-
-    au = al + nn;
-    for (int i = 0; i < nn; ++i) {
-        file_matrix >> mem[au + i];
-    }
-
-    vect = au + nn;
-    for (int i = 0; i < n; ++i) {
-        file_vector >> mem[vect + i];
-    }
+    return y;
 }
 
-// Функция для записи данных в файл
-void write_(const std::vector<float>& vect) {
-    std::ofstream file_out("tmp3.txt");
-    for (int i = 0; i < n; ++i) {
-        file_out << vect[i] << std::endl;
+// Обратный ход: решение системы Ux = y
+vector<double> backwardSubstitution(const vector<vector<double>>& U, const vector<double>& y) {
+    int n = U.size();
+    vector<double> x(n);
+
+    for (int i = n - 1; i >= 0; i--) {
+        double sum = 0;
+        for (int j = i + 1; j < n; j++) {
+            sum += U[i][j] * x[j];
+        }
+        x[i] = (y[i] - sum) / U[i][i];
     }
+
+    return x;
+}
+
+// Функция для чтения матрицы A и вектора F из файла
+bool readMatrixAndVector(const string& matrixFile, const string& vectorFile, vector<vector<double>>& A, vector<double>& F) {
+    ifstream matrixStream(matrixFile);
+    ifstream vectorStream(vectorFile);
+
+    if (!matrixStream.is_open() || !vectorStream.is_open()) {
+        cerr << "Не удалось открыть файл." << endl;
+        return false;
+    }
+
+    int n;
+    matrixStream >> n; // Считываем размер матрицы
+    A = vector<vector<double>>(n, vector<double>(n, 0));
+    F = vector<double>(n, 0);
+
+    // Считывание матрицы A
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            matrixStream >> A[i][j];
+        }
+    }
+
+    // Считывание вектора F
+    for (int i = 0; i < n; i++) {
+        vectorStream >> F[i];
+    }
+
+    matrixStream.close();
+    vectorStream.close();
+    return true;
 }
 
 int main() {
-    std::vector<int> ia(4097);
-    int di, al, au, vect;
-    std::vector<float> mem;
+    setlocale(LC_ALL, "Russian");
 
-    // Чтение данных
-    read_(mem, ia, di, al, au, vect);
+    vector<vector<double>> A, L, U;
+    vector<double> F, y, x;
 
-    // Создаем временные векторы для передачи в функции
-    std::vector<float> di_vec(mem.begin() + di + 1, mem.begin() + di + 1 + n);
-    std::vector<float> al_vec(mem.begin() + al + 1, mem.begin() + al + 1 + nn);
-    std::vector<float> au_vec(mem.begin() + au + 1, mem.begin() + au + 1 + nn);
-    std::vector<float> vect_vec(mem.begin() + vect + 1, mem.begin() + vect + 1 + n);
+    // Считывание матрицы и вектора из файлов
+    if (!readMatrixAndVector("matrix.txt", "vector.txt", A, F)) {
+        return 1;
+    }
 
-    // Вызываем функции с исправленными аргументами
-    calc_lusq(ia, di_vec, al_vec, au_vec);
-    calc_y(ia, di_vec, al_vec, vect_vec);
-    calc_x(ia, di_vec, au_vec, vect_vec);
+    // 1. LU(sq)-разложение
+    if (LU_SQ_Decomposition(A, L, U)) {
+        cout << "Матрица L:" << endl;
+        printMatrix(L);
+        cout << endl << "Матрица U:" << endl;
+        printMatrix(U);
 
-    // Записываем результат в файл
-    write_(vect_vec);
+        // 2. Прямой ход: решение системы Ly = F
+        y = forwardSubstitution(L, F);
+        cout << endl << "Вектор y (решение системы Ly = F):" << endl;
+        printVector(y);
 
-    // Выводим результат на экран
-    for (int i = 0; i < n; ++i) {
-        std::cout << vect_vec[i] << std::endl;
+        // 3. Обратный ход: решение системы Ux = y
+        x = backwardSubstitution(U, y);
+        cout << endl << "Вектор x (решение системы Ux = y):" << endl;
+        printVector(x);
+    }
+    else {
+        cout << "Разложение невозможно." << endl;
     }
 
     return 0;
