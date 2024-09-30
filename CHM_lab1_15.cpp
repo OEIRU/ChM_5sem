@@ -1,180 +1,232 @@
-
 #include <iostream>
 #include <vector>
-#include <cmath> // Для функции sqrt
-#include <iomanip> // Для форматирования вывода
-#include <fstream> // Для работы с файлами;
+#include <cmath>
+#include <iomanip>
+#include <limits>
+#include <algorithm>
+
 using namespace std;
 
 // Функция для вывода матрицы
 void printMatrix(const vector<vector<double>>& matrix) 
 {
-   int n = matrix.size();
-   for (int i = 0; i < n; i++)
-   {
-      for (int j = 0; j < n; j++) 
-         cout << setw(10) << matrix[i][j] << " ";
-      cout << endl;
-   }
+    int n = matrix.size();
+    for (int i = 0; i < n; i++) 
+    {
+        for (int j = 0; j < n; j++) 
+            cout << setw(10) << matrix[i][j] << " ";
+        cout << endl;
+    }
 }
 
 // Функция для вывода вектора
 void printVector(const vector<double>& vec) 
 {
-   for (double v : vec) 
-      cout << setw(10) << v << " ";
-   cout << endl;
+    for (double v : vec) 
+        cout << setw(10) << v << " ";
+    cout << endl;
 }
 
-// Функция для выполнения LU(sq)-разложения
+// LU-разложение с диагональным преобладанием
 bool LU_SQ_Decomposition(const vector<vector<double>>& A, vector<vector<double>>& L, vector<vector<double>>& U) 
 {
-   int n = A.size();
-   L = vector<vector<double>>(n, vector<double>(n, 0));
-   U = vector<vector<double>>(n, vector<double>(n, 0));
+    int n = A.size();
+    L = vector<vector<double>>(n, vector<double>(n, 0));
+    U = vector<vector<double>>(n, vector<double>(n, 0));
 
-   for (int i = 0; i < n; i++) 
-   {
-      for (int j = 0; j <= i; j++) 
-      {
-         double sum = 0;
-
-         // Вычисление элементов нижнетреугольной матрицы L
-         if (i == j) {  // Диагональный элемент
-            for (int k = 0; k < j; k++) 
+    for (int i = 0; i < n; i++) 
+    {
+        for (int j = 0; j <= i; j++) 
+        {
+            double sum = 0;
+            if (i == j) 
+            { 
+                for (int k = 0; k < j; k++) 
+                    sum += L[j][k] * L[j][k];
+                double value = A[j][j] - sum;
+                if (value <= 0) 
+                {
+                    cout << "Матрица не является положительно определенной." << endl;
+                    return false;
+                }
+                L[j][j] = sqrt(value);
+                U[j][j] = L[j][j];
+            } 
+            else 
             {
-               sum += L[j][k] * L[j][k];
+                for (int k = 0; k < j; k++) 
+                    sum += L[i][k] * L[j][k];
+                L[i][j] = (A[i][j] - sum) / L[j][j];
+                U[j][i] = L[i][j];
             }
-            double value = A[j][j] - sum;
-            if (value <= 0) 
-            {
-               cout << "Матрица не является положительно определенной." << endl;
-               return false;
-            }
-            L[j][j] = sqrt(value);
-            U[j][j] = L[j][j]; // L и U имеют одинаковые диагональные элементы
-         }
-         else 
-         {  // Вне диагонали
-            for (int k = 0; k < j; k++) 
-            {
-               sum += L[i][k] * L[j][k];
-            }
-            L[i][j] = (A[i][j] - sum) / L[j][j];
-            U[j][i] = L[i][j]; // U является транспонированной копией L
-         }
-      }
-   }
-
-   return true;
+        }
+    }
+    return true;
 }
 
-// Прямой ход: решение системы Ly = F
-vector<double> forwardSubstitution(const vector<vector<double>>& L, const vector<double>& F) {
-   int n = L.size();
-   vector<double> y(n);
-
-   for (int i = 0; i < n; i++) 
-   {
-      double sum = 0;
-      for (int j = 0; j < i; j++) 
-      {
-         sum += L[i][j] * y[j];
-      }
-      y[i] = (F[i] - sum) / L[i][i];
-   }
-
-   return y;
+// Прямой ход
+vector<double> forwardSubstitution(const vector<vector<double>>& L, const vector<double>& F) 
+{
+    int n = L.size();
+    vector<double> y(n);
+    for (int i = 0; i < n; i++) 
+    {
+        double sum = 0;
+        for (int j = 0; j < i; j++) 
+            sum += L[i][j] * y[j];
+        y[i] = (F[i] - sum) / L[i][i];
+    }
+    return y;
 }
 
-// Обратный ход: решение системы Ux = y
+// Обратный ход
 vector<double> backwardSubstitution(const vector<vector<double>>& U, const vector<double>& y) 
 {
-   int n = U.size();
-   vector<double> x(n);
-
-   for (int i = n - 1; i >= 0; i--) 
-   {
-      double sum = 0;
-      for (int j = i + 1; j < n; j++) 
-      {
-         sum += U[i][j] * x[j];
-      }
-      x[i] = (y[i] - sum) / U[i][i];
-   }
-
-   return x;
+    int n = U.size();
+    vector<double> x(n);
+    for (int i = n - 1; i >= 0; i--) 
+    {
+        double sum = 0;
+        for (int j = i + 1; j < n; j++) 
+            sum += U[i][j] * x[j];
+        x[i] = (y[i] - sum) / U[i][i];
+    }
+    return x;
 }
 
-// Функция для чтения матрицы A и вектора F из файла
-bool readMatrixAndVector(const string& matrixFile, const string& vectorFile, vector<vector<double>>& A, vector<double>& F) {
-   ifstream matrixStream(matrixFile);
-   ifstream vectorStream(vectorFile);
-
-   if (!matrixStream.is_open() || !vectorStream.is_open()) 
-   {
-      cerr << "Не удалось открыть файл." << endl;
-      return false;
-   }
-
-   int n;
-   matrixStream >> n; // Считываем размер матрицы
-   A = vector<vector<double>>(n, vector<double>(n, 0));
-   F = vector<double>(n, 0);
-
-   // Считывание матрицы A
-   for (int i = 0; i < n; i++) 
-   {
-      for (int j = 0; j < n; j++) 
-      {
-         matrixStream >> A[i][j];
-      }
-   }
-
-   // Считывание вектора F
-   for (int i = 0; i < n; i++) 
-   {
-      vectorStream >> F[i];
-   }
-
-   matrixStream.close();
-   vectorStream.close();
-   return true;
+// Построение матрицы с регулируемым числом обусловленности
+vector<vector<double>> buildMatrixWithConditioning(int n, double alpha) 
+{
+    vector<vector<double>> A(n, vector<double>(n, 0));
+    for (int i = 0; i < n; i++) 
+    {
+        for (int j = 0; j < n; j++) 
+        {
+            if (i == j)
+                A[i][j] = alpha * (i + 1);
+            else
+                A[i][j] = 1.0 / (i + j + 1);
+        }
+    }
+    return A;
 }
 
-int main() {
-   setlocale(LC_ALL, "Russian");
+// Вычисление ошибки
+double computeError(const vector<double>& x, const vector<double>& x_exact) 
+{
+    double error = 0;
+    for (int i = 0; i < x.size(); i++) 
+        error += pow(x[i] - x_exact[i], 2);
+    return sqrt(error);
+}
 
-   vector<vector<double>> A, L, U;
-   vector<double> F, y, x;
+// Построение матрицы Гильберта
+vector<vector<double>> buildHilbertMatrix(int n) 
+{
+    vector<vector<double>> A(n, vector<double>(n));
+    for (int i = 0; i < n; i++) 
+    {
+        for (int j = 0; j < n; j++) 
+        {
+            A[i][j] = 1.0 / (i + j + 1);
+        }
+    }
+    return A;
+}
 
-   // Считывание матрицы и вектора из файлов
-   if (!readMatrixAndVector("matrix.txt", "vector.txt", A, F)) 
-   {
-      return 1;
-   }
+// Метод Гаусса с выбором ведущего элемента
+bool gaussianElimination(vector<vector<double>>& A, vector<double>& b) 
+{
+    int n = A.size();
+    for (int i = 0; i < n; i++) 
+    {
+        int maxRow = i;
+        for (int k = i + 1; k < n; k++) 
+        {
+            if (abs(A[k][i]) > abs(A[maxRow][i])) 
+                maxRow = k;
+        }
 
-   // 1. LU(sq)-разложение
-   if (LU_SQ_Decomposition(A, L, U)) 
-   {
-      cout << "Матрица L:" << endl;
-      printMatrix(L);
-      cout << endl << "Матрица U:" << endl;
-      printMatrix(U);
+        swap(A[i], A[maxRow]);
+        swap(b[i], b[maxRow]);
 
-      // 2. Прямой ход: решение системы Ly = F
-      y = forwardSubstitution(L, F);
-      cout << endl << "Вектор y (решение системы Ly = F):" << endl;
-      printVector(y);
+        for (int k = i + 1; k < n; k++) 
+        {
+            double factor = A[k][i] / A[i][i];
+            for (int j = i; j < n; j++) 
+                A[k][j] -= factor * A[i][j];
+            b[k] -= factor * b[i];
+        }
+    }
 
-      // 3. Обратный ход: решение системы Ux = y
-      x = backwardSubstitution(U, y);
-      cout << endl << "Вектор x (решение системы Ux = y):" << endl;
-      printVector(x);
-   }
-   else {
-      cout << "Разложение невозможно." << endl;
-   }
+    vector<double> x(n);
+    for (int i = n - 1; i >= 0; i--) 
+    {
+        x[i] = b[i] / A[i][i];
+        for (int j = i - 1; j >= 0; j--) 
+            b[j] -= A[j][i] * x[i];
+    }
+    return true;
+}
 
-   return 0;
+// Подсчет операций для LU-разложения
+int countOperationsLU(int n) 
+{
+    return (n * n * n) / 3;
+}
+
+// Подсчет операций для метода Гаусса
+int countOperationsGauss(int n) 
+{
+    return (2 * n * n * n) / 3;
+}
+
+int main() 
+{
+    setlocale(LC_ALL, "Russian");
+
+    // Размер матрицы и параметр для регулировки числа обусловленности
+    int n = 5;
+    double alpha = 1e3;
+
+    vector<vector<double>> A_cond = buildMatrixWithConditioning(n, alpha);
+    vector<vector<double>> L, U;
+    vector<double> F(n, 1);  // Вектор правой части
+    vector<double> x_exact(n, 1); // Точное решение
+
+    // Решение с помощью LU-разложения
+    cout << "Решение для матрицы с регулируемым числом обусловленности:" << endl;
+    if (LU_SQ_Decomposition(A_cond, L, U)) 
+    {
+        vector<double> y = forwardSubstitution(L, F);
+        vector<double> x = backwardSubstitution(U, y);
+        double error = computeError(x, x_exact);
+        cout << "Погрешность решения: " << error << endl;
+    }
+
+    // Решение для матрицы Гильберта
+    vector<vector<double>> A_hilbert = buildHilbertMatrix(n);
+    cout << "\nРешение для матрицы Гильберта:" << endl;
+    if (LU_SQ_Decomposition(A_hilbert, L, U)) 
+    {
+        vector<double> y = forwardSubstitution(L, F);
+        vector<double> x = backwardSubstitution(U, y);
+        double error = computeError(x, x_exact);
+        cout << "Погрешность решения: " << error << endl;
+    }
+
+    // Метод Гаусса
+    vector<vector<double>> A_gauss = A_hilbert;
+    vector<double> F_gauss = F;
+    cout << "\nРешение с использованием метода Гаусса:" << endl;
+    if (gaussianElimination(A_gauss, F_gauss)) 
+    {
+        cout << "Метод Гаусса успешно выполнен." << endl;
+    }
+
+    // Подсчет операций
+    cout << "\nЧисло операций для LU-разложения: " << countOperationsLU(n) << endl;
+    cout << "Число операций для метода Гаусса: " << countOperationsGauss(n) << endl;
+
+    return 0;
 }
