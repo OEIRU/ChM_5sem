@@ -8,8 +8,8 @@
 #include <limits>
 
 // Выбор точности: раскомментируйте нужное определение
-typedef double precision_t;
-// typedef float precision_t;
+// typedef double precision_t;
+typedef float precision_t;
 
 using namespace std;
 
